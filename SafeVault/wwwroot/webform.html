@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Safe Vault</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 700px; margin: 40px auto; padding: 0 20px; }
+        h1 { text-align: center; }
+        section { border: 1px solid #ccc; border-radius: 8px; padding: 20px; margin-bottom: 24px; }
+        section h2 { margin-top: 0; }
+        label { display: block; margin-top: 10px; font-weight: bold; }
+        input { width: 100%; padding: 8px; margin-top: 4px; box-sizing: border-box; }
+        button { margin-top: 14px; padding: 10px 20px; cursor: pointer; }
+        .response { margin-top: 12px; padding: 10px; border-radius: 4px; white-space: pre-wrap; word-break: break-all; }
+        .success { background: #d4edda; color: #155724; }
+        .error { background: #f8d7da; color: #721c24; }
+        table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+        th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
+        th { background: #f0f0f0; }
+    </style>
+</head>
+<body>
+    <h1>Safe Vault</h1>
+
+    <!-- REGISTER -->
+    <section>
+        <h2>Register</h2>
+        <form id="registerForm">
+            <label for="reg-username">Username:</label>
+            <input type="text" id="reg-username" name="username" required>
+
+            <label for="reg-email">Email:</label>
+            <input type="email" id="reg-email" name="email" required>
+
+            <label for="reg-password">Password:</label>
+            <input type="password" id="reg-password" name="password" required>
+
+            <button type="submit">Register</button>
+        </form>
+        <div id="registerResult"></div>
+    </section>
+
+    <!-- LOGIN -->
+    <section>
+        <h2>Login</h2>
+        <form id="loginForm">
+            <label for="login-username">Username:</label>
+            <input type="text" id="login-username" name="username" required>
+
+            <label for="login-password">Password:</label>
+            <input type="password" id="login-password" name="password" required>
+
+            <button type="submit">Login</button>
+        </form>
+        <div id="loginResult"></div>
+    </section>
+
+    <!-- LIST USERS -->
+    <section>
+        <h2>List Users</h2>
+        <button id="listUsersBtn">Get All Users</button>
+        <div id="listResult"></div>
+    </section>
+
+    <script>
+        let authToken = '';
+
+        function showResult(elementId, message, isError) {
+            const el = document.getElementById(elementId);
+            el.className = 'response ' + (isError ? 'error' : 'success');
+            el.innerHTML = message;
+        }
+
+        // REGISTER
+        document.getElementById('registerForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const form = e.target;
+            const data = {
+                username: form.username.value,
+                email: form.email.value,
+                password: form.password.value
+            };
+            try {
+                const res = await fetch('/api/user/register', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                const body = await res.json();
+                if (res.ok) {
+                    showResult('registerResult',
+                        '<strong>User registered successfully!</strong>\n' +
+                        'API Response:\n' + JSON.stringify(body, null, 2), false);
+                    form.reset();
+                } else {
+                    showResult('registerResult',
+                        '<strong>Registration failed</strong>\n' +
+                        'API Response:\n' + JSON.stringify(body, null, 2), true);
+                }
+            } catch (err) {
+                showResult('registerResult', 'Error: ' + err.message, true);
+            }
+        });
+
+        // LOGIN
+        document.getElementById('loginForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const form = e.target;
+            const data = {
+                username: form.username.value,
+                password: form.password.value
+            };
+            try {
+                const res = await fetch('/api/user/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                const body = await res.json();
+                if (res.ok) {
+                    authToken = body.token;
+                    showResult('loginResult',
+                        '<strong>Login successful! Token saved.</strong>\n' +
+                        'API Response:\n' + JSON.stringify(body, null, 2), false);
+                    form.reset();
+                } else {
+                    showResult('loginResult',
+                        '<strong>Login failed</strong>\n' +
+                        'API Response:\n' + JSON.stringify(body, null, 2), true);
+                }
+            } catch (err) {
+                showResult('loginResult', 'Error: ' + err.message, true);
+            }
+        });
+
+        // LIST USERS
+        document.getElementById('listUsersBtn').addEventListener('click', async () => {
+            if (!authToken) {
+                showResult('listResult', 'You must login first to get a token.', true);
+                return;
+            }
+            try {
+                const res = await fetch('/api/user', {
+                    headers: { 'Authorization': 'Bearer ' + authToken }
+                });
+                if (res.status === 401) {
+                    showResult('listResult',
+                        '<strong>Unauthorized (401)</strong>\nToken is invalid or expired. Please login again.', true);
+                    return;
+                }
+                const body = await res.json();
+                if (res.ok) {
+                    let table = '<table><tr><th>Id</th><th>Username</th><th>Email</th></tr>';
+                    body.forEach(u => {
+                        table += '<tr><td>' + u.id + '</td><td>' + u.username + '</td><td>' + u.email + '</td></tr>';
+                    });
+                    table += '</table>';
+                    showResult('listResult',
+                        '<strong>Users retrieved successfully!</strong>' + table +
+                        '\nAPI Response:\n' + JSON.stringify(body, null, 2), false);
+                } else {
+                    showResult('listResult',
+                        '<strong>Failed to list users</strong>\n' +
+                        'API Response:\n' + JSON.stringify(body, null, 2), true);
+                }
+            } catch (err) {
+                showResult('listResult', 'Error: ' + err.message, true);
+            }
+        });
+    </script>
+</body>
+</html>
