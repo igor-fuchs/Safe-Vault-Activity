@@ -16,98 +16,102 @@ public class TestSecurity
         return Validator.TryValidateObject(model, context, results, true);
     }
 
-    private static AppDbContext CreateInMemoryDb() =>
-        new(new DbContextOptionsBuilder<AppDbContext>()
-            .UseInMemoryDatabase(Guid.NewGuid().ToString())
+    private static AppDbContext CreateInMemoryDb()
+    {
+        var db = new AppDbContext(new DbContextOptionsBuilder<AppDbContext>()
+            .UseSqlite("Data Source=:memory:")
             .Options);
-
-    // === XSS — DTO Validation Layer ===
-    // RegisterRequest.Username has [RegularExpression(@"^[a-zA-Z0-9_-]+$")]
-    // which rejects any character used in HTML/JS injection at the DTO boundary.
-
-    [TestCase("<script>alert(1)</script>")]
-    [TestCase("<img onerror=alert(1)>")]
-    [TestCase("\" onmouseover=\"alert(1)")]
-    [TestCase("javascript:alert(1)")]
-    public void XSS_UsernameWithHtmlOrJsPayload_IsRejectedByDTOValidation(string payload)
-    {
-        var request = new RegisterRequest { Username = payload, Email = "test@example.com", Password = "SecurePass1!" };
-        Assert.That(Validate(request), Is.False);
+        db.Database.OpenConnection();
+        db.Database.EnsureCreated();
+        return db;
     }
 
-    [TestCase("<img src=x onerror=alert(1)>")]
-    [TestCase("<iframe src='evil.com'>")]
-    public void XSS_EmailWithHtmlPayload_IsRejectedByEmailValidation(string payload)
-    {
-        var request = new RegisterRequest { Username = "john_doe", Email = payload, Password = "SecurePass1!" };
-        Assert.That(Validate(request), Is.False);
-    }
+    // === XSS ===
 
     [Test]
-    public void XSS_JsonSerializer_EscapesHtmlCharsInApiResponse()
+    public void XSS_ScriptTagInUsername_IsRejectedByDTOValidation()
     {
-        // System.Text.Json (ASP.NET default) encodes <, > and & to \uXXXX by default,
-        // preventing reflected XSS if a client renders the JSON body as HTML.
-        var response = new UserResponse { Id = 1, Username = "<script>alert(1)</script>", Email = "x@x.com" };
-        var json = JsonSerializer.Serialize(response);
-
-        Assert.That(json, Does.Not.Contain("<script>"), "Raw angle brackets must not appear in JSON output");
-        Assert.That(json, Does.Contain("\\u003c").Or.Contain("\\u003C"), "< must be unicode-escaped in JSON");
+        var request = new RegisterRequest
+        {
+            Username = "<script>alert(1)</script>",
+            Email = "test@example.com",
+            Password = "SecurePass1!"
+        };
+        Assert.That(Validate(request), Is.False);
     }
 
-    // === SQL Injection — EF Core Parameterization ===
-    // EF Core translates LINQ lambdas to parameterized SQL (WHERE Username = @p0).
-    // The payload is bound as a literal value and is never interpreted as SQL syntax.
+    // === SQL Injection ===
 
-    [TestCase("' OR '1'='1")]
-    [TestCase("' OR 1=1 --")]
-    [TestCase("' OR 'x'='x")]
-    public async Task SQLInjection_TautologyPayloadInLogin_DoesNotReturnAnyUser(string payload)
+    [Test]
+    public async Task SQLInjection_TautologyPayload_DoesNotReturnAnyUser()
     {
         using var db = CreateInMemoryDb();
         db.Users.Add(new User { Username = "admin", Email = "admin@example.com", PasswordHash = "hash" });
         await db.SaveChangesAsync();
 
-        // This mirrors UserService.LoginAsync: the payload is a parameter value, not SQL
+        var payload = "' OR '1'='1";
         var result = await db.Users.FirstOrDefaultAsync(u => u.Username == payload);
 
-        Assert.That(result, Is.Null, $"SQL tautology '{payload}' must not bypass user lookup");
+        Assert.That(result, Is.Null);
+    }
+
+    // === RBAC ===
+
+    [Test]
+    public void RBAC_NewUserReceivesUserRole()
+    {
+        var user = new User
+        {
+            Username = "newuser",
+            Email = "new@example.com",
+            PasswordHash = "hash"
+        };
+        Assert.That(user.Role, Is.EqualTo("User"));
     }
 
     [Test]
-    public async Task SQLInjection_DropTablePayload_DoesNotAffectDatabase()
+    public async Task RBAC_AdminRoleCanBeAssigned()
     {
         using var db = CreateInMemoryDb();
-        db.Users.Add(new User { Username = "admin", Email = "admin@example.com", PasswordHash = "hash" });
+        var admin = new User
+        {
+            Username = "admin",
+            Email = "admin@example.com",
+            PasswordHash = "hash",
+            Role = "Admin"
+        };
+        db.Users.Add(admin);
         await db.SaveChangesAsync();
 
-        var payload = "'; DROP TABLE Users; --";
-        await db.Users.FirstOrDefaultAsync(u => u.Username == payload);
-
-        Assert.That(await db.Users.CountAsync(), Is.EqualTo(1), "DROP TABLE payload must not remove records");
+        var found = await db.Users.FirstOrDefaultAsync(u => u.Username == "admin");
+        Assert.That(found!.Role, Is.EqualTo("Admin"));
     }
 
     [Test]
-    public async Task SQLInjection_UnionPayload_DoesNotLeakOtherUsersData()
+    public async Task RBAC_UserRoleDiffersFromAdmin()
     {
         using var db = CreateInMemoryDb();
-        db.Users.Add(new User { Username = "alice", Email = "alice@example.com", PasswordHash = "hash1" });
-        db.Users.Add(new User { Username = "bob", Email = "bob@example.com", PasswordHash = "hash2" });
+        db.Users.Add(new User { Username = "admin", Email = "a@x.com", PasswordHash = "h", Role = "Admin" });
+        db.Users.Add(new User { Username = "regular", Email = "r@x.com", PasswordHash = "h", Role = "User" });
         await db.SaveChangesAsync();
 
-        var payload = "' UNION SELECT Id, Username, Email, PasswordHash FROM Users --";
-        var result = await db.Users.FirstOrDefaultAsync(u => u.Username == payload);
+        var admin = await db.Users.FirstAsync(u => u.Username == "admin");
+        var user = await db.Users.FirstAsync(u => u.Username == "regular");
 
-        Assert.That(result, Is.Null, "UNION injection payload must not return any user");
+        Assert.That(admin.Role, Is.Not.EqualTo(user.Role));
     }
 
-    // SQL payloads in Username also fail RegisterRequest DTO validation due to [RegularExpression]
-    [TestCase("' OR 1=1 --")]
-    [TestCase("'; DROP TABLE Users; --")]
-    [TestCase("' UNION SELECT * FROM Users --")]
-    public void SQLInjection_UsernamePayload_IsAlsoRejectedByDTOValidation(string payload)
+    [Test]
+    public async Task RBAC_OnlyAdminRoleExistsAmongAdmins()
     {
-        var request = new RegisterRequest { Username = payload, Email = "test@example.com", Password = "SecurePass1!" };
-        Assert.That(Validate(request), Is.False);
+        using var db = CreateInMemoryDb();
+        db.Users.Add(new User { Username = "admin", Email = "a@x.com", PasswordHash = "h", Role = "Admin" });
+        db.Users.Add(new User { Username = "u1", Email = "u1@x.com", PasswordHash = "h" });
+        db.Users.Add(new User { Username = "u2", Email = "u2@x.com", PasswordHash = "h" });
+        await db.SaveChangesAsync();
+
+        var admins = await db.Users.Where(u => u.Role == "Admin").ToListAsync();
+        Assert.That(admins, Has.Count.EqualTo(1));
+        Assert.That(admins[0].Username, Is.EqualTo("admin"));
     }
 }

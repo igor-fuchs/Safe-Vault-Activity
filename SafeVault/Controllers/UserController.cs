@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using SafeVault.DTOs;
@@ -30,10 +31,22 @@ public class UserController : ControllerBase
         return Ok(response);
     }
 
+    [Authorize(Roles = "Admin,User")]
+    [HttpGet("me")]
+    public async Task<IActionResult> GetMe()
+    {
+        var userId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        UserResponse user = await _userService.GetUserByIdAsync(userId);
+        return Ok(user);
+    }
+
     [Authorize]
     [HttpGet]
     public async Task<IActionResult> GetAll()
     {
+        if (!User.IsInRole("Admin"))
+            return Unauthorized(new { error = "Only Admin users can access this endpoint." });
+
         List<UserResponse> users = await _userService.GetAllUsersAsync();
         return Ok(users);
     }

@@ -1,29 +1,28 @@
 @baseUrl = http://localhost:5000
 @token = {{login.response.body.token}}
 
-### Register a new user
+### ---------------------------------------------------
+### POST /api/user/register — Public, no auth required
+### Roles allowed: everyone
+### New users are always assigned role: User
+### ---------------------------------------------------
 # @name register
 POST {{baseUrl}}/api/user/register
 Content-Type: application/json
 
 {
   "username": "john_doe",
-  "email": "john@<h1 style=\"color:red\">HACKED</h1>",
+  "email": "john@example.com",
   "password": "SecurePass1!"
 }
 
-### Register a admin
-# @name register
-POST {{baseUrl}}/api/user/register
-Content-Type: application/json
+###
 
-{
-  "username": "admin",
-  "email": "admin@example.com",
-  "password": "Admin123"
-}
-
-### Login
+### ---------------------------------------------------
+### POST /api/user/login — Public, no auth required
+### Returns a signed JWT (1-hour expiry)
+### JWT payload includes: nameid, unique_name, role
+### ---------------------------------------------------
 # @name login
 POST {{baseUrl}}/api/user/login
 Content-Type: application/json
@@ -33,6 +32,37 @@ Content-Type: application/json
   "password": "SecurePass1!"
 }
 
-### Get all users (requires authentication)
-GET {{baseUrl}}/api/user
+###
+
+### ---------------------------------------------------
+### POST /api/user/login — Login as pre-seeded Admin
+### Username: admin  |  Password: Admin@1234!
+### ---------------------------------------------------
+# @name loginAdmin
+POST {{baseUrl}}/api/user/login
+Content-Type: application/json
+
+{
+  "username": "admin",
+  "password": "Admin@1234!"
+}
+
+###
+
+### ---------------------------------------------------
+### GET /api/user/me — Requires Authentication
+### Roles allowed: User, Admin
+### Returns the profile of the currently logged-in user
+### ---------------------------------------------------
+GET {{baseUrl}}/api/user/me
 Authorization: Bearer {{token}}
+
+###
+
+### ---------------------------------------------------
+### GET /api/user — Requires Authentication
+### Roles allowed: Admin ONLY (User receives 401)
+### Returns the full list of all registered users
+### ---------------------------------------------------
+GET {{baseUrl}}/api/user
+Authorization: Bearer {{loginAdmin.response.body.token}}

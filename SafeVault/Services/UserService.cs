@@ -36,7 +36,8 @@ public class UserService
         {
             Username = request.Username,
             Email = email,
-            PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password)
+            PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password),
+            Role = "User"
         };
 
         _context.Users.Add(user);
@@ -68,9 +69,18 @@ public class UserService
             {
                 Id = u.Id,
                 Username = u.Username,
-                Email = u.Email
+                Email = u.Email,
+                Role = u.Role
             })
             .ToListAsync();
+    }
+
+    public async Task<UserResponse> GetUserByIdAsync(int id)
+    {
+        var user = await _context.Users.FindAsync(id)
+            ?? throw new KeyNotFoundException("User not found.");
+
+        return MapToResponse(user);
     }
 
     private string GenerateJwtToken(User user)
@@ -83,7 +93,8 @@ public class UserService
         var claims = new[]
         {
             new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
-            new Claim(ClaimTypes.Name, user.Username)
+            new Claim(ClaimTypes.Name, user.Username),
+            new Claim(ClaimTypes.Role, user.Role)
         };
 
         var token = new JwtSecurityToken(
@@ -98,6 +109,7 @@ public class UserService
     {
         Id = user.Id,
         Username = user.Username,
-        Email = user.Email
+        Email = user.Email,
+        Role = user.Role
     };
 }
