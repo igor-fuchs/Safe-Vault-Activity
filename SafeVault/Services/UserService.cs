@@ -1,9 +1,10 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
-using Microsoft.AspNetCore.Identity;
+using System.Text.Encodings.Web;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using SafeVault.Data;
 using SafeVault.DTOs;
 using SafeVault.Models;
 
@@ -11,35 +12,45 @@ namespace SafeVault.Services;
 
 public class UserService
 {
-    private readonly UserManager<User> _userManager;
+    private readonly AppDbContext _context;
 
-    public UserService(UserManager<User> userManager)
+    public UserService(AppDbContext context)
     {
-        _userManager = userManager;
+        _context = context;
     }
 
     public async Task<UserResponse> RegisterAsync(RegisterRequest request)
     {
+        // Encode email to prevent XSS attacks
+        HtmlEncoder sanitizer = HtmlEncoder.Default;
+        var email = sanitizer.Encode(request.Email);
+        Console.WriteLine($"Sanitized email: {email}"); // Debug log
+
+        if (await _context.Users.AnyAsync(u => u.Username == request.Username))
+            throw new ArgumentException("Username is already taken.");
+
+        if (await _context.Users.AnyAsync(u => u.Email == email))
+            throw new ArgumentException("Email is already in use.");
+
         var user = new User
         {
-            UserName = request.Username,
-            Email = request.Email
+            Username = request.Username,
+            Email = email,
+            PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password)
         };
 
-        var result = await _userManager.CreateAsync(user, request.Password);
-
-        if (!result.Succeeded)
-            throw new Exception(string.Join(", ", result.Errors.Select(e => e.Description)));
+        _context.Users.Add(user);
+        await _context.SaveChangesAsync();
 
         return MapToResponse(user);
     }
 
     public async Task<LoginResponse> LoginAsync(LoginRequest request)
     {
-        var user = await _userManager.FindByNameAsync(request.Username);
+        var user = await _context.Users.FirstOrDefaultAsync(u => u.Username == request.Username);
 
-        if (user == null || !await _userManager.CheckPasswordAsync(user, request.Password))
-            throw new Exception("Invalid username or password.");
+        if (user == null || !BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash))
+            throw new UnauthorizedAccessException("Invalid username or password.");
 
         var token = GenerateJwtToken(user);
 
@@ -52,12 +63,12 @@ public class UserService
 
     public async Task<List<UserResponse>> GetAllUsersAsync()
     {
-        return await _userManager.Users
+        return await _context.Users
             .Select(u => new UserResponse
             {
                 Id = u.Id,
-                Username = u.UserName!,
-                Email = u.Email!
+                Username = u.Username,
+                Email = u.Email
             })
             .ToListAsync();
     }
@@ -71,8 +82,8 @@ public class UserService
 
         var claims = new[]
         {
-            new Claim(ClaimTypes.NameIdentifier, user.Id),
-            new Claim(ClaimTypes.Name, user.UserName!)
+            new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
+            new Claim(ClaimTypes.Name, user.Username)
         };
 
         var token = new JwtSecurityToken(
@@ -86,7 +97,7 @@ public class UserService
     private static UserResponse MapToResponse(User user) => new()
     {
         Id = user.Id,
-        Username = user.UserName!,
-        Email = user.Email!
+        Username = user.Username,
+        Email = user.Email
     };
 }

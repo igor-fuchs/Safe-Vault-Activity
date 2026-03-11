@@ -5,6 +5,8 @@ namespace SafeVault.DTOs;
 public class RegisterRequest
 {
     [Required]
+    [StringLength(30)]
+    [RegularExpression(@"^[a-zA-Z0-9_-]+$")]
     public string Username { get; set; } = string.Empty;
 
     [Required]
@@ -12,8 +14,8 @@ public class RegisterRequest
     public string Email { get; set; } = string.Empty;
 
     [Required]
-    [DataType(DataType.Password)]
-    [MinLength(8)]
+    [RegularExpression(@"^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$",
+        ErrorMessage = "Password must be at least 8 characters long and include uppercase, lowercase, number, and special character.")]
     public string Password { get; set; } = string.Empty;
 }
 
@@ -23,14 +25,12 @@ public class LoginRequest
     public string Username { get; set; } = string.Empty;
 
     [Required]
-    [DataType(DataType.Password)]
-    [MinLength(8)]
     public string Password { get; set; } = string.Empty;
 }
 
 public class UserResponse
 {
-    public string Id { get; set; } = string.Empty;
+    public int Id { get; set; }
     public string Username { get; set; } = string.Empty;
     public string Email { get; set; } = string.Empty;
 }

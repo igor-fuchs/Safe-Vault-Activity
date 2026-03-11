@@ -1,0 +1,38 @@
+@baseUrl = http://localhost:5000
+@token = {{login.response.body.token}}
+
+### Register a new user
+# @name register
+POST {{baseUrl}}/api/user/register
+Content-Type: application/json
+
+{
+  "username": "john_doe",
+  "email": "john@<h1 style=\"color:red\">HACKED</h1>",
+  "password": "SecurePass1!"
+}
+
+### Register a admin
+# @name register
+POST {{baseUrl}}/api/user/register
+Content-Type: application/json
+
+{
+  "username": "admin",
+  "email": "admin@example.com",
+  "password": "Admin123"
+}
+
+### Login
+# @name login
+POST {{baseUrl}}/api/user/login
+Content-Type: application/json
+
+{
+  "username": "john_doe",
+  "password": "SecurePass1!"
+}
+
+### Get all users (requires authentication)
+GET {{baseUrl}}/api/user
+Authorization: Bearer {{token}}
