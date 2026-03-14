@@ -31,7 +31,7 @@ The project implements an authentication and authorization system focused on sec
 ### 1. Clone the repository
 
 ```bash
-git clone https://github.com/seu-usuario/Safe-Vault-Activity.git
+git clone https://github.com/igor-fuchs/Safe-Vault-Activity
 cd Safe-Vault-Activity/SafeVault
 ```
 
@@ -59,7 +59,7 @@ Open in your browser: `http://localhost:5000/webform.html`
 
 ### 5. Pre-seeded Admin account
 
-In development mode, an admin user is created automatically at startup:
+In development mode, an admin user is created automatically at startup in development mode:
 
 | Field    | Value          |
 |----------|----------------|
