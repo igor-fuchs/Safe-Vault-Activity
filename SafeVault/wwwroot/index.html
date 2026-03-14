@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Safe Vault — API Playground</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="container">
+
+    <h1>&#128274; Safe Vault</h1>
+    <p class="subtitle">API Playground &mdash; register, login, and explore protected endpoints</p>
+
+    <!-- STATUS BAR -->
+    <div id="status-bar">
+        <span id="status-dot">&#9898;</span>
+        <span id="status-text">Not logged in. Please register or login below.</span>
+    </div>
+
+    <!-- ADMIN HINT -->
+    <div class="admin-hint">
+        <strong>&#8505;&#65039; Pre-seeded Admin account</strong><br>
+        A default admin user is created automatically when the application starts in DEVELOPMENT.<br>
+        Username: <code>admin</code> &nbsp;|&nbsp;
+        Password: <code>Admin@1234!</code> &nbsp;|&nbsp;
+        Role: <span class="badge badge-admin">Admin</span>
+    </div>
+
+    <!-- ═══════════════════════════════════════
+         POST /api/user/register
+    ════════════════════════════════════════════ -->
+    <div class="card">
+        <div class="card-header">
+            <h2>Register</h2>
+            <span class="badge badge-public">Public</span>
+        </div>
+        <p class="endpoint-line">
+            <span class="method method-post">POST</span>
+            <code>/api/user/register</code>
+        </p>
+
+        <div class="requirements open">
+            <strong>Requirements</strong>
+            <ul>
+                <li>No authentication required</li>
+                <li>Username: letters, numbers, <code>_</code> or <code>-</code>, max 30 chars</li>
+                <li>Password: min 8 chars, uppercase, lowercase, digit and one of <code>@$!%*?&amp;</code></li>
+                <li>All newly registered users receive role <strong>User</strong></li>
+            </ul>
+        </div>
+
+        <form id="registerForm" autocomplete="off">
+            <label for="reg-username">Username</label>
+            <input type="text" id="reg-username" name="username" placeholder="john_doe" required>
+
+            <label for="reg-email">Email</label>
+            <input type="email" id="reg-email" name="email" placeholder="john@example.com" required>
+
+            <label for="reg-password">Password</label>
+            <input type="password" id="reg-password" name="password" placeholder="SecurePass1!" required>
+            <p class="hint">Must have &ge;8 chars, 1 uppercase, 1 lowercase, 1 digit, 1 special char.</p>
+
+            <button type="submit" class="btn">Register</button>
+        </form>
+
+        <div id="registerResponse" class="response-wrapper" style="display:none">
+            <p class="response-label">Response</p>
+            <div id="registerMsg" class="user-msg"></div>
+            <div class="status-code-row"><span id="registerSc" class="sc"></span><span id="registerScText"></span></div>
+            <pre id="registerRaw" class="raw-response"></pre>
+        </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════
+         POST /api/user/login
+    ════════════════════════════════════════════ -->
+    <div class="card">
+        <div class="card-header">
+            <h2>Login</h2>
+            <span class="badge badge-public">Public</span>
+        </div>
+        <p class="endpoint-line">
+            <span class="method method-post">POST</span>
+            <code>/api/user/login</code>
+        </p>
+
+        <div class="requirements open">
+            <strong>Requirements</strong>
+            <ul>
+                <li>No authentication required</li>
+                <li>Returns a JWT Bearer token stored automatically for requests below</li>
+                <li>The JWT payload includes <code>role</code>, <code>nameid</code> and <code>unique_name</code> claims</li>
+            </ul>
+        </div>
+
+        <form id="loginForm" autocomplete="off">
+            <label for="login-username">Username</label>
+            <input type="text" id="login-username" name="username" placeholder="john_doe" required>
+
+            <label for="login-password">Password</label>
+            <input type="password" id="login-password" name="password" placeholder="SecurePass1!" required>
+
+            <button type="submit" class="btn">Login</button>
+        </form>
+
+        <div id="loginResponse" class="response-wrapper" style="display:none">
+            <p class="response-label">Response</p>
+            <div id="loginMsg" class="user-msg"></div>
+            <div class="status-code-row"><span id="loginSc" class="sc"></span><span id="loginScText"></span></div>
+            <pre id="loginRaw" class="raw-response"></pre>
+        </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════
+         AUTHENTICATED ENDPOINTS
+    ════════════════════════════════════════════ -->
+
+        <!-- GET /api/user/me -->
+        <div class="card">
+            <div class="card-header">
+                <h2>My Profile</h2>
+                <span class="badge badge-user">User</span>
+                <span class="badge badge-admin">Admin</span>
+            </div>
+            <p class="endpoint-line">
+                <span class="method method-get">GET</span>
+                <code>/api/user/me</code>
+            </p>
+
+            <div class="requirements user-only">
+                <strong>Requirements</strong>
+                <ul>
+                    <li>Must be logged in — any role (<strong>User</strong> or <strong>Admin</strong>)</li>
+                    <li>Returns the profile of the currently authenticated user</li>
+                    <li>The JWT token from the last successful login is sent automatically</li>
+                </ul>
+            </div>
+
+            <div id="meNotice" class="auth-notice">&#128274; Login required — please login above to use this endpoint.</div>
+            <button class="btn" id="getMeBtn">Get My Profile</button>
+
+            <div id="meResponse" class="response-wrapper" style="display:none">
+                <p class="response-label">Response</p>
+                <div id="meMsg" class="user-msg"></div>
+                <div class="status-code-row"><span id="meSc" class="sc"></span><span id="meScText"></span></div>
+                <pre id="meRaw" class="raw-response"></pre>
+            </div>
+        </div>
+
+        <!-- GET /api/user -->
+        <div class="card">
+            <div class="card-header">
+                <h2>List All Users</h2>
+                <span class="badge badge-admin">Admin only</span>
+            </div>
+            <p class="endpoint-line">
+                <span class="method method-get">GET</span>
+                <code>/api/user</code>
+            </p>
+
+            <div class="requirements admin-only">
+                <strong>Requirements</strong>
+                <ul>
+                    <li>Must be logged in as <strong>Admin</strong></li>
+                    <li>Returns the complete user list including roles</li>
+                    <li>Users with role <strong>User</strong> will receive <strong>401 Unauthorized</strong></li>
+                    <li>Use the pre-seeded account: <code>admin / Admin@1234!</code></li>
+                </ul>
+            </div>
+
+            <div id="listNotice" class="auth-notice">&#128274; Login required — please login above to use this endpoint.</div>
+            <button class="btn" id="listUsersBtn">Get All Users</button>
+
+            <div id="listResponse" class="response-wrapper" style="display:none">
+                <p class="response-label">Response</p>
+                <div id="listMsg" class="user-msg"></div>
+                <div class="status-code-row"><span id="listSc" class="sc"></span><span id="listScText"></span></div>
+                <div id="listTable"></div>
+                <pre id="listRaw" class="raw-response"></pre>
+            </div>
+        </div>
+
+</div><!-- /container -->
+
+<script src="script.js"></script>
+</body>
+</html>
